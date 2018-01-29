@@ -28,17 +28,10 @@ class Market(object):
                 {'price': 0, 'amount': 0}]}
         return self.depth
 
-    def convert_to_usd(self):
-        if self.currency == "USD":
-            return
-        for direction in ("asks", "bids"):
-            for order in self.depth[direction]:
-                order["price"] = self.fc.convert(order["price"], self.currency, "USD")
-
     def ask_update_depth(self):
         try:
             self.update_depth()
-            self.convert_to_usd()
+            self.invert()
             self.depth_updated = time.time()
         except (urllib.error.HTTPError, urllib.error.URLError) as e:
             logging.error("HTTPError, can't update market: %s" % self.name)
@@ -55,6 +48,20 @@ class Market(object):
                    'bid': depth['bids'][0]}
         return res
 
+    def invert(self):
+        if not self.should_invert():
+            return
+        for ask in self.depth['asks']:
+            ask['amount'] = ask['amount'] * ask['price']
+            ask['price'] = 1.0 / ask['price']
+        for bid in self.depth['bids']:
+            bid['amount'] = bid['amount'] * bid['price']
+            bid['price'] = 1.0 / bid['price']
+        bids = self.depth['asks']
+        asks = self.depth['bids']
+        self.depth['asks'] = asks
+        self.depth['bids'] = bids
+
     ## Abstract methods
     def update_depth(self):
         pass
@@ -64,3 +71,6 @@ class Market(object):
 
     def sell(self, price, amount):
         pass
+
+    def should_invert(self):
+        return False
